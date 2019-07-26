@@ -74,7 +74,7 @@ func (srv *Server) Serve(ctx context.Context) error {
 			return ctx.Err()
 		case <-srv.closed:
 			log.Println("tcpserver is closing ...")
-			return nil
+			return ln.Close()
 		default:
 			con, err := ln.Accept()
 			if err != nil {
