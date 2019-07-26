@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net"
+	"sync"
 )
 
 //ConnectionHandler connection handler definition
@@ -14,6 +15,8 @@ type Server struct {
 	network string
 	address string
 	handler ConnectionHandler
+	closed  chan bool
+	wgroup  sync.WaitGroup
 }
 
 //Network option for listener
@@ -48,7 +51,9 @@ type ServerOpt func(*Server)
 
 //NewServer create a new tcpserver
 func NewServer(opts ...ServerOpt) *Server {
-	serv := &Server{}
+	serv := &Server{
+		closed: make(chan bool),
+	}
 	for _, opt := range opts {
 		opt(serv)
 	}
@@ -67,6 +72,9 @@ func (srv *Server) Serve(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
+		case <-srv.closed:
+			log.Println("tcpserver is closing ...")
+			return nil
 		default:
 			con, err := ln.Accept()
 			if err != nil {
@@ -77,11 +85,19 @@ func (srv *Server) Serve(ctx context.Context) error {
 				return err
 			}
 
+			srv.wgroup.Add(1)
 			go func() {
+				defer srv.wgroup.Done()
 				if err := srv.handler(ctx, con); err != nil {
 					log.Printf("connection %s handle failed: %s\n", con.RemoteAddr().String(), err)
 				}
 			}()
 		}
 	}
+}
+
+//Close tcpserver waiting all connections finished
+func (srv *Server) Close() {
+	close(srv.closed)
+	srv.wgroup.Wait()
 }
