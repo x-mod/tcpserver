@@ -12,11 +12,11 @@ type ConnectionHandler func(ctx context.Context, conn net.Conn) error
 
 //Server represent tcpserver
 type Server struct {
-	network string
-	address string
-	handler ConnectionHandler
-	closed  chan bool
-	wgroup  sync.WaitGroup
+	network  string
+	address  string
+	handler  ConnectionHandler
+	listener net.Listener
+	wgroup   sync.WaitGroup
 }
 
 //Network option for listener
@@ -51,9 +51,7 @@ type ServerOpt func(*Server)
 
 //NewServer create a new tcpserver
 func NewServer(opts ...ServerOpt) *Server {
-	serv := &Server{
-		closed: make(chan bool),
-	}
+	serv := &Server{}
 	for _, opt := range opts {
 		opt(serv)
 	}
@@ -67,21 +65,19 @@ func (srv *Server) Serve(ctx context.Context) error {
 		return err
 	}
 	log.Println("tcpserver serving at ", srv.network, srv.address)
-
+	srv.listener = ln
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-srv.closed:
-			log.Println("tcpserver is closing ...")
-			return ln.Close()
 		default:
-			con, err := ln.Accept()
+			con, err := srv.listener.Accept()
 			if err != nil {
 				if ne, ok := err.(net.Error); ok && ne.Temporary() {
 					log.Printf("warning: accept temp err: %v", ne)
 					continue
 				}
+				log.Println(err)
 				return err
 			}
 
@@ -98,6 +94,6 @@ func (srv *Server) Serve(ctx context.Context) error {
 
 //Close tcpserver waiting all connections finished
 func (srv *Server) Close() {
-	close(srv.closed)
+	_ = srv.listener.Close()
 	srv.wgroup.Wait()
 }
