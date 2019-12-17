@@ -60,7 +60,9 @@ type ServerOpt func(*Server)
 
 //NewServer create a new tcpserver
 func New(opts ...ServerOpt) *Server {
-	serv := &Server{}
+	serv := &Server{
+		network: "tcp",
+	}
 	for _, opt := range opts {
 		opt(serv)
 	}
