@@ -23,10 +23,9 @@ func EchoHandler(ctx context.Context, con net.Conn) error {
 }
 
 func main() {
-	srv := tcpserver.NewServer(
-		tcpserver.Network("tcp"),
-		tcpserver.Address("127.0.0.1:8080"),
-		tcpserver.Handler(EchoHandler),
+	srv := tcpserver.New(
+		tcpserver.Address(":8080"),
+		tcpserver.TCPHandler(EchoHandler),
 	)
 	if err := srv.Serve(context.TODO()); err != nil {
 		log.Println("tcpserver failed:", err)
