@@ -1,5 +1,5 @@
 module github.com/x-mod/tcpserver
 
-go 1.12
+go 1.13
 
-require github.com/x-mod/routine v1.1.0
+require github.com/x-mod/routine v1.2.7

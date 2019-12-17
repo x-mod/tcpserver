@@ -12,12 +12,14 @@ import (
 )
 
 func main() {
-	srv := tcpserver.NewServer(
+	srv := tcpserver.New(
 		tcpserver.Network("tcp"),
 		tcpserver.Address("127.0.0.1:8080"),
-		tcpserver.Handler(EchoHandler),
+		tcpserver.TCPHandler(EchoHandler),
 	)
-	if err := routine.Main(routine.ExecutorFunc(srv.Serve)); err != nil {
+	if err := routine.Main(
+		context.TODO(),
+		routine.ExecutorFunc(srv.Serve)); err != nil {
 		log.Println("tcpserver failed:", err)
 	}
 }

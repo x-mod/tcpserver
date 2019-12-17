@@ -7,14 +7,14 @@ import (
 	"sync"
 )
 
-//ConnectionHandler connection handler definition
-type ConnectionHandler func(ctx context.Context, conn net.Conn) error
+//Handler connection handler definition
+type Handler func(ctx context.Context, conn net.Conn) error
 
 //Server represent tcpserver
 type Server struct {
 	network  string
 	address  string
-	handler  ConnectionHandler
+	handler  Handler
 	listener net.Listener
 	wgroup   sync.WaitGroup
 }
@@ -37,8 +37,17 @@ func Address(addr string) ServerOpt {
 	}
 }
 
-//Handler option for connection
-func Handler(h ConnectionHandler) ServerOpt {
+//Listener option for listener
+func Listener(ln net.Listener) ServerOpt {
+	return func(srv *Server) {
+		if ln != nil {
+			srv.listener = ln
+		}
+	}
+}
+
+//TCPHandler option for Connection Handler
+func TCPHandler(h Handler) ServerOpt {
 	return func(srv *Server) {
 		if h != nil {
 			srv.handler = h
@@ -50,7 +59,7 @@ func Handler(h ConnectionHandler) ServerOpt {
 type ServerOpt func(*Server)
 
 //NewServer create a new tcpserver
-func NewServer(opts ...ServerOpt) *Server {
+func New(opts ...ServerOpt) *Server {
 	serv := &Server{}
 	for _, opt := range opts {
 		opt(serv)
@@ -60,12 +69,14 @@ func NewServer(opts ...ServerOpt) *Server {
 
 //Serve tcpserver serving
 func (srv *Server) Serve(ctx context.Context) error {
-	ln, err := net.Listen(srv.network, srv.address)
-	if err != nil {
-		return err
+	if srv.listener == nil {
+		ln, err := net.Listen(srv.network, srv.address)
+		if err != nil {
+			return err
+		}
+		log.Println("tcpserver serving at ", srv.network, srv.address)
+		srv.listener = ln
 	}
-	log.Println("tcpserver serving at ", srv.network, srv.address)
-	srv.listener = ln
 	for {
 		select {
 		case <-ctx.Done():
@@ -77,7 +88,7 @@ func (srv *Server) Serve(ctx context.Context) error {
 					log.Printf("warning: accept temp err: %v", ne)
 					continue
 				}
-				log.Println(err)
+				log.Println("failed: ", err)
 				return err
 			}
 
