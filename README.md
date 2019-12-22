@@ -25,6 +25,7 @@ func EchoHandler(ctx context.Context, con net.Conn) error {
 func main() {
 	srv := tcpserver.New(
 		tcpserver.Address(":8080"),
+		//tcpserver.TLSConfig(tlsconfig),
 		tcpserver.TCPHandler(EchoHandler),
 	)
 	if err := srv.Serve(context.TODO()); err != nil {

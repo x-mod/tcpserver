@@ -2,6 +2,7 @@ package tcpserver
 
 import (
 	"context"
+	"crypto/tls"
 	"log"
 	"net"
 	"sync"
@@ -16,6 +17,7 @@ type Server struct {
 	address  string
 	handler  Handler
 	listener net.Listener
+	tlsc     *tls.Config
 	wgroup   sync.WaitGroup
 }
 
@@ -34,6 +36,13 @@ func Address(addr string) ServerOpt {
 		if len(addr) != 0 {
 			srv.address = addr
 		}
+	}
+}
+
+//TLSConfig option
+func TLSConfig(sc *tls.Config) ServerOpt {
+	return func(srv *Server) {
+		srv.tlsc = sc
 	}
 }
 
@@ -78,6 +87,9 @@ func (srv *Server) Serve(ctx context.Context) error {
 		}
 		log.Println("tcpserver serving at ", srv.network, srv.address)
 		srv.listener = ln
+	}
+	if srv.tlsc != nil {
+		srv.listener = tls.NewListener(srv.listener, srv.tlsc)
 	}
 	for {
 		select {
