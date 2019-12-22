@@ -13,12 +13,20 @@ type Handler func(ctx context.Context, conn net.Conn) error
 
 //Server represent tcpserver
 type Server struct {
+	name     string
 	network  string
 	address  string
 	handler  Handler
 	listener net.Listener
 	tlsc     *tls.Config
 	wgroup   sync.WaitGroup
+}
+
+//Name option for tcpserver
+func Name(name string) ServerOpt {
+	return func(srv *Server) {
+		srv.name = name
+	}
 }
 
 //Network option for listener
@@ -70,6 +78,7 @@ type ServerOpt func(*Server)
 //NewServer create a new tcpserver
 func New(opts ...ServerOpt) *Server {
 	serv := &Server{
+		name:    "tcpserver",
 		network: "tcp",
 	}
 	for _, opt := range opts {
@@ -85,7 +94,7 @@ func (srv *Server) Serve(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		log.Println("tcpserver serving at ", srv.network, srv.address)
+		log.Println(srv.name, " serving at ", srv.network, srv.address)
 		srv.listener = ln
 	}
 	if srv.tlsc != nil {
