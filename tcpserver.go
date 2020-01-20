@@ -3,9 +3,12 @@ package tcpserver
 import (
 	"context"
 	"crypto/tls"
-	"log"
+	"fmt"
 	"net"
+	"runtime"
 	"sync"
+
+	"golang.org/x/net/trace"
 )
 
 //Handler connection handler definition
@@ -17,6 +20,9 @@ type Server struct {
 	network  string
 	address  string
 	handler  Handler
+	traced   bool
+	mu       sync.Mutex
+	events   trace.EventLog
 	listener net.Listener
 	tlsc     *tls.Config
 	wgroup   sync.WaitGroup
@@ -72,6 +78,12 @@ func TCPHandler(h Handler) ServerOpt {
 	}
 }
 
+func NetTrace(flag bool) ServerOpt {
+	return func(srv *Server) {
+		srv.traced = flag
+	}
+}
+
 //ServerOpt typedef
 type ServerOpt func(*Server)
 
@@ -84,17 +96,40 @@ func New(opts ...ServerOpt) *Server {
 	for _, opt := range opts {
 		opt(serv)
 	}
+	if serv.traced {
+		_, file, line, _ := runtime.Caller(1)
+		serv.events = trace.NewEventLog(serv.name, fmt.Sprintf("%s:%d", file, line))
+	}
 	return serv
+}
+
+func (srv *Server) printf(format string, a ...interface{}) {
+	srv.mu.Lock()
+	defer srv.mu.Unlock()
+	if srv.events != nil {
+		srv.events.Printf(format, a...)
+	}
+}
+
+func (srv *Server) errorf(format string, a ...interface{}) {
+	srv.mu.Lock()
+	defer srv.mu.Unlock()
+	if srv.events != nil {
+		srv.events.Errorf(format, a...)
+	}
 }
 
 //Serve tcpserver serving
 func (srv *Server) Serve(ctx context.Context) error {
+	if srv.handler == nil {
+		return fmt.Errorf("tcpserver.Handler required")
+	}
 	if srv.listener == nil {
 		ln, err := net.Listen(srv.network, srv.address)
 		if err != nil {
 			return err
 		}
-		log.Println(srv.name, " serving at ", srv.network, srv.address)
+		srv.printf("%s serving at %s:%s", srv.name, srv.network, srv.address)
 		srv.listener = ln
 	}
 	if srv.tlsc != nil {
@@ -108,18 +143,25 @@ func (srv *Server) Serve(ctx context.Context) error {
 			con, err := srv.listener.Accept()
 			if err != nil {
 				if ne, ok := err.(net.Error); ok && ne.Temporary() {
-					log.Printf("warning: accept temp err: %v", ne)
+					srv.errorf("accept temp err: %v", ne)
 					continue
 				}
-				log.Println("failed: ", err)
+				srv.errorf("accept failed: %v", err)
 				return err
 			}
 
 			srv.wgroup.Add(1)
 			go func() {
 				defer srv.wgroup.Done()
+				if srv.traced {
+					tr := trace.New("client", con.RemoteAddr().String())
+					ctx = trace.NewContext(ctx, tr)
+				}
 				if err := srv.handler(ctx, con); err != nil {
-					log.Printf("connection %s handle failed: %s\n", con.RemoteAddr().String(), err)
+					srv.errorf("client (%s) failed: %v", con.RemoteAddr().String(), err)
+				}
+				if tr, ok := trace.FromContext(ctx); ok {
+					tr.Finish()
 				}
 			}()
 		}
@@ -130,4 +172,10 @@ func (srv *Server) Serve(ctx context.Context) error {
 func (srv *Server) Close() {
 	_ = srv.listener.Close()
 	srv.wgroup.Wait()
+	srv.mu.Lock()
+	defer srv.mu.Unlock()
+	if srv.events != nil {
+		srv.events.Finish()
+		srv.events = nil
+	}
 }
