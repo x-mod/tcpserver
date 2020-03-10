@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"sync"
 
+	"github.com/x-mod/event"
 	"golang.org/x/net/trace"
 )
 
@@ -24,7 +25,8 @@ type Server struct {
 	mu       sync.Mutex
 	events   trace.EventLog
 	listener net.Listener
-	tlsc     *tls.Config
+	tls      *tls.Config
+	stop     *event.Event
 	wgroup   sync.WaitGroup
 }
 
@@ -54,9 +56,9 @@ func Address(addr string) ServerOpt {
 }
 
 //TLSConfig option
-func TLSConfig(sc *tls.Config) ServerOpt {
+func TLSConfig(tls *tls.Config) ServerOpt {
 	return func(srv *Server) {
-		srv.tlsc = sc
+		srv.tls = tls
 	}
 }
 
@@ -132,13 +134,16 @@ func (srv *Server) Serve(ctx context.Context) error {
 		srv.printf("%s serving at %s:%s", srv.name, srv.network, srv.address)
 		srv.listener = ln
 	}
-	if srv.tlsc != nil {
-		srv.listener = tls.NewListener(srv.listener, srv.tlsc)
+	if srv.tls != nil {
+		srv.listener = tls.NewListener(srv.listener, srv.tls)
 	}
+	srv.stop = event.New()
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
+		case <-srv.stop.Done():
+			return nil
 		default:
 			con, err := srv.listener.Accept()
 			if err != nil {
@@ -170,10 +175,10 @@ func (srv *Server) Serve(ctx context.Context) error {
 
 //Close tcpserver waiting all connections finished
 func (srv *Server) Close() {
-	_ = srv.listener.Close()
+	if srv.stop != nil {
+		srv.stop.Fire()
+	}
 	srv.wgroup.Wait()
-	srv.mu.Lock()
-	defer srv.mu.Unlock()
 	if srv.events != nil {
 		srv.events.Finish()
 		srv.events = nil
