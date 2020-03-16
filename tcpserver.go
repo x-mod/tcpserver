@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"sync"
 
+	"github.com/golang/glog"
+
 	"github.com/x-mod/event"
 	"golang.org/x/net/trace"
 )
@@ -94,6 +96,7 @@ func New(opts ...ServerOpt) *Server {
 	serv := &Server{
 		name:    "tcpserver",
 		network: "tcp",
+		stop:    event.New(),
 	}
 	for _, opt := range opts {
 		opt(serv)
@@ -111,6 +114,7 @@ func (srv *Server) printf(format string, a ...interface{}) {
 	if srv.events != nil {
 		srv.events.Printf(format, a...)
 	}
+	glog.V(2).Infof(format, a...)
 }
 
 func (srv *Server) errorf(format string, a ...interface{}) {
@@ -119,6 +123,7 @@ func (srv *Server) errorf(format string, a ...interface{}) {
 	if srv.events != nil {
 		srv.events.Errorf(format, a...)
 	}
+	glog.Errorf(format, a...)
 }
 
 //Serve tcpserver serving
@@ -137,21 +142,22 @@ func (srv *Server) Serve(ctx context.Context) error {
 	if srv.tls != nil {
 		srv.listener = tls.NewListener(srv.listener, srv.tls)
 	}
-	srv.stop = event.New()
 	for {
 		select {
 		case <-ctx.Done():
+			srv.errorf("%s stopped: %v", srv.name, ctx.Err())
 			return ctx.Err()
 		case <-srv.stop.Done():
+			srv.printf("%s stopped.", srv.name)
 			return nil
 		default:
 			con, err := srv.listener.Accept()
 			if err != nil {
 				if ne, ok := err.(net.Error); ok && ne.Temporary() {
-					srv.errorf("accept temp err: %v", ne)
+					srv.errorf("%s accept temp err: %v", srv.name, ne)
 					continue
 				}
-				srv.errorf("accept failed: %v", err)
+				srv.errorf("%s accept failed: %v", srv.name, err)
 				return err
 			}
 
@@ -175,9 +181,8 @@ func (srv *Server) Serve(ctx context.Context) error {
 
 //Close tcpserver waiting all connections finished
 func (srv *Server) Close() {
-	if srv.stop != nil {
-		srv.stop.Fire()
-	}
+	srv.stop.Fire()
+	srv.listener.Close()
 	srv.wgroup.Wait()
 	if srv.events != nil {
 		srv.events.Finish()

@@ -2,10 +2,13 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
 	"net"
 	"net/textproto"
 	"strings"
+
+	"github.com/golang/glog"
 
 	"golang.org/x/net/trace"
 
@@ -14,6 +17,8 @@ import (
 )
 
 func main() {
+	flag.Parse()
+	defer glog.Flush()
 	srv := tcpserver.New(
 		tcpserver.Network("tcp"),
 		tcpserver.Address("127.0.0.1:8080"),
