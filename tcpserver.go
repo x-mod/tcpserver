@@ -8,9 +8,8 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/golang/glog"
-
 	"github.com/x-mod/event"
+	"github.com/x-mod/glog"
 	"golang.org/x/net/trace"
 )
 
