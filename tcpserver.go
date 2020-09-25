@@ -189,7 +189,8 @@ func (srv *Server) Close() <-chan struct{} {
 	if srv.serving.HasFired() {
 		srv.listener.Close()
 		srv.ctxCancel()
+		srv.wgroup.Wait()
+		return srv.stopped.Done()
 	}
-	srv.wgroup.Wait()
-	return srv.stopped.Done()
+	return event.Done()
 }
