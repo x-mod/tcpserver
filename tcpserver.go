@@ -18,17 +18,19 @@ type Handler func(ctx context.Context, conn net.Conn) error
 
 //Server represent tcpserver
 type Server struct {
-	name     string
-	network  string
-	address  string
-	handler  Handler
-	traced   bool
-	mu       sync.Mutex
-	events   trace.EventLog
-	listener net.Listener
-	tls      *tls.Config
-	stop     *event.Event
-	wgroup   sync.WaitGroup
+	name      string
+	network   string
+	address   string
+	handler   Handler
+	traced    bool
+	mu        sync.Mutex
+	events    trace.EventLog
+	listener  net.Listener
+	tls       *tls.Config
+	stopped   *event.Event
+	serving   *event.Event
+	wgroup    sync.WaitGroup
+	ctxCancel context.CancelFunc
 }
 
 //Name option for tcpserver
@@ -95,7 +97,8 @@ func New(opts ...ServerOpt) *Server {
 	serv := &Server{
 		name:    "tcpserver",
 		network: "tcp",
-		stop:    event.New(),
+		serving: event.New(),
+		stopped: event.New(),
 	}
 	for _, opt := range opts {
 		opt(serv)
@@ -127,6 +130,8 @@ func (srv *Server) errorf(format string, a ...interface{}) {
 
 //Serve tcpserver serving
 func (srv *Server) Serve(ctx context.Context) error {
+	defer srv.stopped.Fire()
+
 	if srv.handler == nil {
 		return fmt.Errorf("tcpserver.Handler required")
 	}
@@ -141,14 +146,15 @@ func (srv *Server) Serve(ctx context.Context) error {
 	if srv.tls != nil {
 		srv.listener = tls.NewListener(srv.listener, srv.tls)
 	}
+	srv.serving.Fire()
+	//add context cancel
+	ctx, cancel := context.WithCancel(ctx)
+	srv.ctxCancel = cancel
 	for {
 		select {
 		case <-ctx.Done():
 			srv.errorf("%s stopped: %v", srv.name, ctx.Err())
 			return ctx.Err()
-		case <-srv.stop.Done():
-			srv.printf("%s stopped.", srv.name)
-			return nil
 		default:
 			con, err := srv.listener.Accept()
 			if err != nil {
@@ -179,12 +185,11 @@ func (srv *Server) Serve(ctx context.Context) error {
 }
 
 //Close tcpserver waiting all connections finished
-func (srv *Server) Close() {
-	srv.stop.Fire()
-	srv.listener.Close()
-	srv.wgroup.Wait()
-	if srv.events != nil {
-		srv.events.Finish()
-		srv.events = nil
+func (srv *Server) Close() <-chan struct{} {
+	if srv.serving.HasFired() {
+		srv.listener.Close()
+		srv.ctxCancel()
 	}
+	srv.wgroup.Wait()
+	return srv.stopped.Done()
 }

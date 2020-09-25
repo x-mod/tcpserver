@@ -6,11 +6,11 @@ import (
 	"net"
 	"net/textproto"
 	"strings"
+	"syscall"
 
 	"github.com/x-mod/glog"
 	"github.com/x-mod/routine"
 	"github.com/x-mod/tcpserver"
-	"github.com/x-mod/tlsconfig"
 	"golang.org/x/net/trace"
 )
 
@@ -25,15 +25,18 @@ func main() {
 		tcpserver.Address("127.0.0.1:8080"),
 		tcpserver.TCPHandler(EchoHandler),
 		tcpserver.NetTrace(true),
-		tcpserver.TLSConfig(tlsconfig.New(
-			tlsconfig.CertKeyPair("out/server.crt", "out/server.key"),
-		)),
+		// tcpserver.TLSConfig(tlsconfig.New(
+		// 	tlsconfig.CertKeyPair("out/server.crt", "out/server.key"),
+		// )),
 	)
 	log.Println("tcpserver serving ...")
 	if err := routine.Main(
 		context.TODO(),
 		routine.ExecutorFunc(srv.Serve),
 		routine.Go(routine.Profiling("127.0.0.1:6060")),
+		routine.Signal(syscall.SIGINT, routine.SigHandler(func() {
+			<-srv.Close()
+		})),
 	); err != nil {
 		log.Println("tcpserver failed:", err)
 	}
@@ -43,7 +46,7 @@ func EchoHandler(ctx context.Context, con net.Conn) error {
 	defer con.Close()
 	c := textproto.NewConn(con)
 
-	c.PrintfLine("HELLO From Server\r\n")
+	c.PrintfLine("HELLO From Server")
 	for {
 		select {
 		case <-ctx.Done():
