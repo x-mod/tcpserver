@@ -30,11 +30,20 @@ func main() {
 		// )),
 	)
 	log.Println("tcpserver serving ...")
+	ctx, cancel := context.WithCancel(context.TODO())
+	defer cancel()
 	if err := routine.Main(
-		context.TODO(),
-		routine.ExecutorFunc(srv.Serve),
+		ctx,
+		routine.ExecutorFunc(func(ctx context.Context) error {
+			<-srv.Serving()
+			log.Println("serving ... now")
+			<-ctx.Done()
+			return nil
+		}),
+		routine.Go(routine.ExecutorFunc(srv.Serve)),
 		routine.Go(routine.Profiling("127.0.0.1:6060")),
 		routine.Signal(syscall.SIGINT, routine.SigHandler(func() {
+			cancel()
 			<-srv.Close()
 		})),
 	); err != nil {
