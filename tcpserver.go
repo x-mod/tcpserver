@@ -130,8 +130,6 @@ func (srv *Server) errorf(format string, a ...interface{}) {
 
 //Serve tcpserver serving
 func (srv *Server) Serve(ctx context.Context) error {
-	defer srv.stopped.Fire()
-
 	if srv.handler == nil {
 		return fmt.Errorf("tcpserver.Handler required")
 	}
@@ -146,6 +144,8 @@ func (srv *Server) Serve(ctx context.Context) error {
 	if srv.tls != nil {
 		srv.listener = tls.NewListener(srv.listener, srv.tls)
 	}
+	//flags
+	defer srv.stopped.Fire()
 	srv.serving.Fire()
 	//add context cancel
 	ctx, cancel := context.WithCancel(ctx)
@@ -182,6 +182,11 @@ func (srv *Server) Serve(ctx context.Context) error {
 			}()
 		}
 	}
+}
+
+//Serving check
+func (srv *Server) Serving() <-chan struct{} {
+	return srv.serving.Done()
 }
 
 //Close tcpserver waiting all connections finished
