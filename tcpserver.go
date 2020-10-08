@@ -144,6 +144,7 @@ func (srv *Server) Serve(ctx context.Context) error {
 	if srv.tls != nil {
 		srv.listener = tls.NewListener(srv.listener, srv.tls)
 	}
+	defer srv.listener.Close()
 	//flags
 	defer srv.stopped.Fire()
 	srv.serving.Fire()

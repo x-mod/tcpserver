@@ -24,12 +24,11 @@ func main() {
 		tcpserver.Network("tcp"),
 		tcpserver.Address("127.0.0.1:8080"),
 		tcpserver.TCPHandler(EchoHandler),
-		tcpserver.NetTrace(true),
 		// tcpserver.TLSConfig(tlsconfig.New(
 		// 	tlsconfig.CertKeyPair("out/server.crt", "out/server.key"),
 		// )),
 	)
-	log.Println("tcpserver serving ...")
+
 	ctx, cancel := context.WithCancel(context.TODO())
 	defer cancel()
 	if err := routine.Main(
@@ -38,13 +37,14 @@ func main() {
 			<-srv.Serving()
 			log.Println("serving ... now")
 			<-ctx.Done()
-			return nil
+			return ctx.Err()
 		}),
 		routine.Go(routine.ExecutorFunc(srv.Serve)),
-		routine.Go(routine.Profiling("127.0.0.1:6060")),
 		routine.Signal(syscall.SIGINT, routine.SigHandler(func() {
 			cancel()
+			log.Println("closing ... now")
 			<-srv.Close()
+			log.Println("closed")
 		})),
 	); err != nil {
 		log.Println("tcpserver failed:", err)
