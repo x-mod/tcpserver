@@ -27,6 +27,7 @@ type Server struct {
 	events    trace.EventLog
 	listener  net.Listener
 	tls       *tls.Config
+	openned   *event.Event
 	stopped   *event.Event
 	serving   *event.Event
 	wgroup    sync.WaitGroup
@@ -97,6 +98,7 @@ func New(opts ...ServerOpt) *Server {
 	serv := &Server{
 		name:    "tcpserver",
 		network: "tcp",
+		openned: event.New(),
 		serving: event.New(),
 		stopped: event.New(),
 	}
@@ -128,8 +130,10 @@ func (srv *Server) errorf(format string, a ...interface{}) {
 	glog.Errorf(format, a...)
 }
 
-// Serve tcpserver serving
-func (srv *Server) Serve(ctx context.Context) error {
+func (srv *Server) Open() error {
+	if srv.openned.HasFired() {
+		return nil
+	}
 	if srv.handler == nil {
 		return fmt.Errorf("tcpserver.Handler required")
 	}
@@ -143,6 +147,16 @@ func (srv *Server) Serve(ctx context.Context) error {
 	}
 	if srv.tls != nil {
 		srv.listener = tls.NewListener(srv.listener, srv.tls)
+	}
+
+	srv.openned.Fire()
+	return nil
+}
+
+// Serve tcpserver serving
+func (srv *Server) Serve(ctx context.Context) error {
+	if err := srv.Open(); err != nil {
+		return err
 	}
 	defer srv.listener.Close()
 	//flags
