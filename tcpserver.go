@@ -13,10 +13,10 @@ import (
 	"golang.org/x/net/trace"
 )
 
-//Handler connection handler definition
+// Handler connection handler definition
 type Handler func(ctx context.Context, conn net.Conn) error
 
-//Server represent tcpserver
+// Server represent tcpserver
 type Server struct {
 	name      string
 	network   string
@@ -33,14 +33,14 @@ type Server struct {
 	ctxCancel context.CancelFunc
 }
 
-//Name option for tcpserver
+// Name option for tcpserver
 func Name(name string) ServerOpt {
 	return func(srv *Server) {
 		srv.name = name
 	}
 }
 
-//Network option for listener
+// Network option for listener
 func Network(inet string) ServerOpt {
 	return func(srv *Server) {
 		if len(inet) != 0 {
@@ -49,7 +49,7 @@ func Network(inet string) ServerOpt {
 	}
 }
 
-//Address option for listener
+// Address option for listener
 func Address(addr string) ServerOpt {
 	return func(srv *Server) {
 		if len(addr) != 0 {
@@ -58,14 +58,14 @@ func Address(addr string) ServerOpt {
 	}
 }
 
-//TLSConfig option
+// TLSConfig option
 func TLSConfig(tls *tls.Config) ServerOpt {
 	return func(srv *Server) {
 		srv.tls = tls
 	}
 }
 
-//Listener option for listener
+// Listener option for listener
 func Listener(ln net.Listener) ServerOpt {
 	return func(srv *Server) {
 		if ln != nil {
@@ -74,7 +74,7 @@ func Listener(ln net.Listener) ServerOpt {
 	}
 }
 
-//TCPHandler option for Connection Handler
+// TCPHandler option for Connection Handler
 func TCPHandler(h Handler) ServerOpt {
 	return func(srv *Server) {
 		if h != nil {
@@ -89,10 +89,10 @@ func NetTrace(flag bool) ServerOpt {
 	}
 }
 
-//ServerOpt typedef
+// ServerOpt typedef
 type ServerOpt func(*Server)
 
-//NewServer create a new tcpserver
+// NewServer create a new tcpserver
 func New(opts ...ServerOpt) *Server {
 	serv := &Server{
 		name:    "tcpserver",
@@ -128,7 +128,7 @@ func (srv *Server) errorf(format string, a ...interface{}) {
 	glog.Errorf(format, a...)
 }
 
-//Serve tcpserver serving
+// Serve tcpserver serving
 func (srv *Server) Serve(ctx context.Context) error {
 	if srv.handler == nil {
 		return fmt.Errorf("tcpserver.Handler required")
@@ -185,12 +185,24 @@ func (srv *Server) Serve(ctx context.Context) error {
 	}
 }
 
-//Serving check
+// Serving check
 func (srv *Server) Serving() <-chan struct{} {
 	return srv.serving.Done()
 }
 
-//Close tcpserver waiting all connections finished
+func (srv *Server) IsServing() bool {
+	return srv.serving.HasFired()
+}
+
+func (srv *Server) Stopped() <-chan struct{} {
+	return srv.stopped.Done()
+}
+
+func (srv *Server) IsStopped() bool {
+	return srv.stopped.HasFired()
+}
+
+// Close tcpserver waiting all connections finished
 func (srv *Server) Close() <-chan struct{} {
 	if srv.serving.HasFired() {
 		srv.listener.Close()
