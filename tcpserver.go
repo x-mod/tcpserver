@@ -142,8 +142,10 @@ func (srv *Server) Open() error {
 		if err != nil {
 			return err
 		}
-		srv.printf("%s serving at %s:%s", srv.name, srv.network, srv.address)
+		// srv.printf("%s serving at %s:%s", srv.name, srv.network, srv.address)
+		glog.Infof("%s serving at %s:%s", srv.name, srv.network, srv.address)
 		srv.listener = ln
+
 	}
 	if srv.tls != nil {
 		srv.listener = tls.NewListener(srv.listener, srv.tls)
